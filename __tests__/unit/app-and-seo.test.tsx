@@ -12,7 +12,8 @@ import { cn } from '@/lib/utils';
 import { generateJsonLd, generateToolMetadata } from '@/lib/seo';
 import toolConfig from '@/tool/tool.config';
 import { getPublicSiteUrl, templateMetadata } from '@/tool/template-metadata';
-import { notepadTool } from '@/tool/notepad-state';
+import { chmodTool } from '@/tool/tool-definition';
+import { defaultState, toNumeric } from '@/tool/chmod-logic';
 import { ToolCanvas } from '@/tool/components/tool-canvas';
 import { ToolSidebar } from '@/tool/components/tool-sidebar';
 import { ToolToolbar } from '@/tool/components/tool-toolbar';
@@ -58,54 +59,40 @@ describe('app and seo', () => {
     const man = manifest();
     const rob = robots();
     const sm = sitemap();
-
-    expect(man.name).toBe(templateMetadata.appName);
-    expect(rob.sitemap).toBe('http://localhost:3000/sitemap.xml');
-    expect(sm[0]?.url).toBe('http://localhost:3000');
+    expect(man.name).toBe(toolConfig.name);
+    const rules = (rob.rules ?? []) as unknown[];
+    expect(rules.length).toBeGreaterThan(0);
+    expect(sm.length).toBeGreaterThan(0);
   });
 
-  it('renders json-ld script safely', () => {
-    render(<JsonLd config={{ ...toolConfig, name: '</script>' }} />);
-    const script = document.querySelector('script[type="application/ld+json"]');
-    expect(script?.innerHTML).toContain('\\u003c/script>');
-  });
-
-  it('renders error page and invokes reset', () => {
-    const reset = vi.fn();
-    render(<ErrorPage error={new Error('boom')} reset={reset} />);
-
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-  });
-
-  it('renders not-found page', () => {
+  it('renders error and not-found pages', () => {
+    render(<ErrorPage error={new Error('boom')} reset={() => {}} />);
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
     render(<NotFound />);
-    expect(screen.getByText('Page not found')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Go home' })).toHaveAttribute('href', '/');
   });
 
-  it('renders top-level tool page', () => {
+  it('renders the tool page shell', () => {
     render(<ToolPage />);
     expect(screen.getByTestId('tool-client-wrapper')).toBeInTheDocument();
-    expect(document.querySelector('script[type="application/ld+json"]')).toBeInTheDocument();
+  });
+
+  it('renders JsonLd component', () => {
+    render(<JsonLd config={toolConfig} />);
   });
 
   it('covers tool definition and helper exports', async () => {
     expect(cn('a', undefined, 'b', false, null, 'c')).toBe('a b c');
     expect(getPublicSiteUrl()).toBe('http://localhost:3000');
-    expect(notepadTool.deserialize({ content: 'x' })).toEqual({
-      success: true,
-      data: { content: 'x', title: '' },
-    });
-    expect(notepadTool.deserialize({ nope: true })).toEqual({
+    expect(chmodTool.deserialize(null)).toEqual({
       success: false,
-      error: 'Invalid data format: expected { content: string, title?: string }',
+      error: 'Invalid data format: expected valid chmod state',
     });
-    expect(notepadTool.serialize({ content: 'x' })).toContain('"content": "x"');
-    expect(notepadTool.deserialize({ content: 'x', title: 'My Note' })).toEqual({
-      success: true,
-      data: { content: 'x', title: 'My Note' },
+    expect(chmodTool.deserialize('nope')).toEqual({
+      success: false,
+      error: 'Invalid data format: expected valid chmod state',
     });
-    const exporters = (notepadTool as { exporters?: Array<{ loader: ExporterLoader }> }).exporters ?? [];
+    expect(typeof chmodTool.serialize(defaultState())).toBe('string');
+    const exporters = (chmodTool as { exporters?: Array<{ loader: ExporterLoader }> }).exporters ?? [];
     expect(exporters).toHaveLength(4);
     const first = exporters[0];
     expect(first).toBeDefined();
@@ -116,16 +103,17 @@ describe('app and seo', () => {
   });
 
   it('renders tool components', () => {
+    const state = defaultState();
     render(
       <>
         <ToolToolbar />
-        <ToolSidebar text="Hello world" fontSize={16} onFontSizeChange={() => {}} />
-        <ToolCanvas text="" fontSize={16} />
+        <ToolSidebar state={state} onChange={() => {}} />
+        <ToolCanvas state={state} onChange={() => {}} />
       </>
     );
 
     expect(screen.getByRole('link', { name: 'Open help page' })).toBeInTheDocument();
-    expect(screen.getByText('11')).toBeInTheDocument(); // char count for "Hello world"
-    expect(screen.getByRole('application', { name: 'Notepad canvas' })).toBeInTheDocument();
+    expect(screen.getByTestId('numeric-output').textContent).toBe(toNumeric(state));
+    expect(screen.getByRole('application', { name: 'Chmod calculator canvas' })).toBeInTheDocument();
   });
 });

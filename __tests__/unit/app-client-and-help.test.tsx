@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import ToolClient from '@/app/tool-client';
 import ToolClientWrapper from '@/app/tool-client-wrapper';
+import { defaultState } from '@/tool/chmod-logic';
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: ReactNode }) => (
@@ -38,7 +39,7 @@ vi.mock('@itsjust/core', () => ({
   ),
   useTool: () => ({
     state: {
-      data: { text: 'Hello' },
+      data: defaultState(),
       setData: mockSetData,
       isDirty: false,
       lastSaved: 'just now',
@@ -52,26 +53,24 @@ vi.mock('@itsjust/core', () => ({
   }),
 }));
 
-vi.mock('@/tool', () => ({
-  toolConfig: {
-    id: 'simple-notepad',
-    name: 'Notepad',
-    version: '1.0.0',
-    features: { sidebar: true },
-    theme: { brand: 'Notepad' },
-  },
-  templateBaseVersion: '1.1.0',
-  ToolCanvas: ({ text }: { text: string }) => <div>canvas:{text}</div>,
-  ToolToolbar: () => <div>toolbar</div>,
-  ToolSidebar: ({ text }: { text: string }) => <div>sidebar:{text}</div>,
-}));
-
-vi.mock('@/tool/notepad-state', () => ({
-  notepadTool: {
-    serialize: (state: unknown) => JSON.stringify(state),
-    deserialize: () => ({ success: true, data: { content: 'From Shared Url', title: '' } }),
-  },
-}));
+vi.mock('@/tool', async () => {
+  const actual = await vi.importActual<typeof import('@/tool')>('@/tool');
+  return {
+    ...actual,
+    toolConfig: {
+      ...actual.toolConfig,
+      id: 'chmod-calculator',
+      name: 'Chmod Symbolic Calculator',
+      version: '1.0.0',
+      features: { sidebar: true },
+      theme: { brand: 'Chmod Calculator' },
+    },
+    templateBaseVersion: '1.4.0',
+    ToolCanvas: ({ state }: { state: { filename: string } }) => <div>canvas:{state.filename}</div>,
+    ToolToolbar: () => <div>toolbar</div>,
+    ToolSidebar: ({ state }: { state: { filename: string } }) => <div>sidebar:{state.filename}</div>,
+  };
+});
 
 describe('app client and help page', () => {
   beforeEach(() => {

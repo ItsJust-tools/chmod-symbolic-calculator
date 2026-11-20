@@ -1,84 +1,81 @@
 'use client';
 
+import type { ChmodState } from '@/tool/types';
+import { explainClass } from '@/tool/chmod-logic';
+
 interface ToolSidebarProps {
-  text: string;
-  fontSize?: number;
-  onFontSizeChange?: (delta: number) => void;
+  state: ChmodState;
+  onChange: (state: ChmodState) => void;
 }
 
-function countWords(text: string): number {
-  const trimmed = (text ?? '').trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).length;
-}
+const CLASS_ORDER = ['user', 'group', 'other'] as const;
 
-function countChars(text: string): number {
-  return (text ?? '').length;
-}
-
-function countLines(text: string): number {
-  if (!text) return 0;
-  return text.split('\n').length;
-}
-
-export function ToolSidebar({ text, fontSize, onFontSizeChange }: ToolSidebarProps) {
-  const words = countWords(text);
-  const chars = countChars(text);
-  const lines = countLines(text);
-  const charsNoSpaces = (text ?? '').replace(/\s/g, '').length;
+export function ToolSidebar({ state, onChange }: ToolSidebarProps) {
+  const totalBits = CLASS_ORDER.reduce(
+    (count, cls) =>
+      count +
+      (state[cls].read ? 1 : 0) +
+      (state[cls].write ? 1 : 0) +
+      (state[cls].execute ? 1 : 0),
+    0
+  );
 
   return (
-    <div className="notepad-sidebar">
+    <div className="chmod-sidebar">
       <div className="sidebar-section">
-        <h3>Document Stats</h3>
-        <dl className="stats-list">
-          <div className="stat-row">
-            <dt>Words</dt>
-            <dd>{words.toLocaleString()}</dd>
-          </div>
-          <div className="stat-row">
-            <dt>Characters</dt>
-            <dd>{chars.toLocaleString()}</dd>
-          </div>
-          <div className="stat-row">
-            <dt>Characters (no spaces)</dt>
-            <dd>{charsNoSpaces.toLocaleString()}</dd>
-          </div>
-          <div className="stat-row">
-            <dt>Lines</dt>
-            <dd>{lines.toLocaleString()}</dd>
-          </div>
-        </dl>
+        <h3>Permission Summary</h3>
+        <ul className="stats-list">
+          {CLASS_ORDER.map((cls) => (
+            <li key={cls} className="stat-row" data-testid={`explain-${cls}`}>
+              {explainClass(cls, state[cls])}
+            </li>
+          ))}
+          <li className="stat-row" data-testid="special-summary">
+            Special bits:{' '}
+            {state.setuid || state.setgid || state.sticky
+              ? [state.setuid && 'setuid', state.setgid && 'setgid', state.sticky && 'sticky']
+                  .filter(Boolean)
+                  .join(', ')
+              : 'none'}
+          </li>
+        </ul>
       </div>
-
-      {fontSize !== undefined && onFontSizeChange && (
-        <div className="sidebar-section">
-          <h3>Font Size</h3>
-          <div className="sidebar-font-controls">
-            <button
-              type="button"
-              className="font-btn"
-              onClick={() => onFontSizeChange(-2)}
-              aria-label="Decrease font size"
-              title="Decrease font size"
-            >
-              A−
-            </button>
-            <span className="font-size-display" aria-live="polite">
-              {fontSize}px
-            </span>
-            <button
-              type="button"
-              className="font-btn"
-              onClick={() => onFontSizeChange(2)}
-              aria-label="Increase font size"
-              title="Increase font size"
-            >
-              A+
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="sidebar-section">
+        <h3>Quick Actions</h3>
+        <button
+          type="button"
+          className="sidebar-btn"
+          onClick={() =>
+            onChange({
+              ...state,
+              user: { read: true, write: true, execute: true },
+              group: { read: true, write: true, execute: true },
+              other: { read: true, write: true, execute: true },
+            })
+          }
+        >
+          Everyone everything
+        </button>
+        <button
+          type="button"
+          className="sidebar-btn"
+          onClick={() =>
+            onChange({
+              ...state,
+              user: { read: false, write: false, execute: false },
+              group: { read: false, write: false, execute: false },
+              other: { read: false, write: false, execute: false },
+            })
+          }
+        >
+          Nothing for anyone
+        </button>
+      </div>
+      <div className="sidebar-section">
+        <p className="chmod-sidebar-note">
+          {totalBits} permission bit{totalBits === 1 ? '' : 's'} enabled across user, group, and other.
+        </p>
+      </div>
     </div>
   );
 }
